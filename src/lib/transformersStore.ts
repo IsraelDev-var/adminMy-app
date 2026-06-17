@@ -1,33 +1,79 @@
-import { mockTransformers } from "@/src/data/mockData";
+import { getPool } from "./db";
 import type { Transformer, TransformerStatus, DistributorName } from "@/src/types";
 
-let _transformers: Transformer[] = [...mockTransformers];
+function rowToTransformer(row: Record<string, unknown>): Transformer {
+  return {
+    id: row.id as number,
+    code: row.code as string,
+    distributorId: row.distributor_id as number,
+    distributorName: row.distributor_name as string,
+    serviceZone: row.service_zone as string,
+    totalCapacityKva: parseFloat(String(row.total_capacity_kva)),
+    availableCapacityKva: parseFloat(String(row.available_capacity_kva)),
+    status: row.status as TransformerStatus,
+    availabilityPercent: row.availability_percent as number,
+    lastUpdated: row.last_updated instanceof Date
+      ? row.last_updated.toISOString()
+      : String(row.last_updated),
+    lat: parseFloat(String(row.lat)),
+    lng: parseFloat(String(row.lng)),
+  };
+}
 
 export const transformersStore = {
-  getAll(): Transformer[] {
-    return _transformers;
+  async getAll(): Promise<Transformer[]> {
+    const { rows } = await getPool().query("SELECT * FROM transformers ORDER BY id");
+    return rows.map(rowToTransformer);
   },
 
-  getByEde(ede: DistributorName): Transformer[] {
-    return _transformers.filter((t) => t.distributorName === ede);
+  async getByEde(ede: DistributorName): Promise<Transformer[]> {
+    const { rows } = await getPool().query(
+      "SELECT * FROM transformers WHERE distributor_name = $1 ORDER BY id",
+      [ede]
+    );
+    return rows.map(rowToTransformer);
   },
 
-  getById(id: number): Transformer | undefined {
-    return _transformers.find((t) => t.id === id);
+  async getById(id: number): Promise<Transformer | undefined> {
+    const { rows } = await getPool().query(
+      "SELECT * FROM transformers WHERE id = $1",
+      [id]
+    );
+    return rows[0] ? rowToTransformer(rows[0]) : undefined;
   },
 
-  updateStatus(id: number, status: TransformerStatus, availableCapacityKva: number): Transformer | null {
-    const idx = _transformers.findIndex((t) => t.id === id);
-    if (idx === -1) return null;
-    const t = _transformers[idx];
-    const availabilityPercent = Math.round((availableCapacityKva / t.totalCapacityKva) * 100);
-    _transformers[idx] = {
-      ...t,
-      status,
-      availableCapacityKva,
-      availabilityPercent,
-      lastUpdated: new Date().toISOString(),
-    };
-    return _transformers[idx];
+  async findAvailableForEde(ede: DistributorName): Promise<Transformer | undefined> {
+    const { rows } = await getPool().query(
+      `SELECT * FROM transformers
+       WHERE distributor_name = $1
+       ORDER BY CASE WHEN status = 'Disponible' THEN 0 ELSE 1 END, id
+       LIMIT 1`,
+      [ede]
+    );
+    return rows[0] ? rowToTransformer(rows[0]) : undefined;
+  },
+
+  async updateStatus(
+    id: number,
+    status: TransformerStatus,
+    availableCapacityKva: number
+  ): Promise<Transformer | null> {
+    const existing = await this.getById(id);
+    if (!existing) return null;
+
+    const availabilityPercent = Math.round(
+      (availableCapacityKva / existing.totalCapacityKva) * 100
+    );
+    const now = new Date().toISOString();
+
+    const { rows } = await getPool().query(
+      `UPDATE transformers
+       SET status = $1, available_capacity_kva = $2,
+           availability_percent = $3, last_updated = $4
+       WHERE id = $5
+       RETURNING *`,
+      [status, availableCapacityKva, availabilityPercent, now, id]
+    );
+    return rows[0] ? rowToTransformer(rows[0]) : null;
   },
 };

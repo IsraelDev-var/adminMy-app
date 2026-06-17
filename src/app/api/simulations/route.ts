@@ -13,7 +13,7 @@ export async function OPTIONS() {
 }
 
 export async function GET() {
-  return NextResponse.json(simulationsStore.getAll(), { headers: CORS });
+  return NextResponse.json(await simulationsStore.getAll(), { headers: CORS });
 }
 
 export async function POST(req: NextRequest) {
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const stored = simulationsStore.add(body);
+    const stored = await simulationsStore.add(body);
     return NextResponse.json({ success: true, simulation: stored }, { status: 201, headers: CORS });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Error desconocido";

@@ -21,7 +21,7 @@ export async function PATCH(
     const numId = Number(id);
     const body = await req.json() as { status: RequestStatus; lastObservation?: string };
 
-    const updated = requestsStore.update(numId, {
+    const updated = await requestsStore.update(numId, {
       status: body.status,
       updatedAt: new Date().toISOString(),
       ...(body.lastObservation ? { lastObservation: body.lastObservation } : {}),

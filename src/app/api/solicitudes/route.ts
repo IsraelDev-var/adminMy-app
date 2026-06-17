@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requestsStore } from "@/src/lib/requestsStore";
+import { transformersStore } from "@/src/lib/transformersStore";
 import type { DistributorName } from "@/src/types";
 
 const CORS = {
@@ -14,7 +15,9 @@ export async function OPTIONS() {
 
 export async function GET(req: NextRequest) {
   const ede = req.nextUrl.searchParams.get("ede") as DistributorName | null;
-  const data = ede ? requestsStore.getByEde(ede) : requestsStore.getAll();
+  const data = ede
+    ? await requestsStore.getByEde(ede)
+    : await requestsStore.getAll();
   return NextResponse.json(data, { headers: CORS });
 }
 
@@ -30,8 +33,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const newRequest = requestsStore.buildFromFormData(formData);
-    requestsStore.add(newRequest);
+    const distributorName = formData.step4.empresaDistribuidora as DistributorName;
+    const transformer = await transformersStore.findAvailableForEde(distributorName);
+    const newRequest = await requestsStore.buildFromFormData(formData, transformer);
+    await requestsStore.add(newRequest);
 
     return NextResponse.json({ success: true, request: newRequest }, { status: 201, headers: CORS });
   } catch (err: unknown) {

@@ -16,7 +16,10 @@ export async function GET(req: NextRequest) {
   const ede = req.nextUrl.searchParams.get("ede") as DistributorName | null;
   const status = req.nextUrl.searchParams.get("status") as TransformerStatus | null;
 
-  let data = ede ? transformersStore.getByEde(ede) : transformersStore.getAll();
+  let data = ede
+    ? await transformersStore.getByEde(ede)
+    : await transformersStore.getAll();
+
   if (status) data = data.filter((t) => t.status === status);
 
   return NextResponse.json(data, { headers: CORS });
